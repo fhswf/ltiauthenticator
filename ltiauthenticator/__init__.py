@@ -162,9 +162,13 @@ class LTIAuthenticator(Authenticator):
                 user_id = handler.get_body_argument('custom_canvas_user_id')
             else:
                 user_id = handler.get_body_argument('user_id')
+            
+            # Erster Teil der Mailadresse (alles vor dem '@'):
+            user_name = handler.get_body_argument('lis_person_contact_email_primary')
+            user_name = user_name.split("@")[0]  # '@...' entfernen
 
             return {
-                'name': user_id,
+                'name': user_name,
                 'auth_state': {k: v for k, v in args.items() if not k.startswith('oauth_')}
             }
 

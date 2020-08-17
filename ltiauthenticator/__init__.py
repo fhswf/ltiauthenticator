@@ -205,13 +205,11 @@ class LTIAuthenticator(Authenticator):
     @gen.coroutine
     def pre_spawn_start(self, user, spawner):
         """Pass upstream_token to spawner via environment variable"""
-        auth_state = {
-            'roles': handler.get_body_argument('roles'),
-            'oauth_consumer_key': handler.get_body_argument('oauth_consumer_key'),
-            'lis_outcome_service_url': handler.get_body_argument('lis_outcome_service_url'),
-            'lis_result_sourcedid': handler.get_body_argument('lis_result_sourcedid')
-        }
-        spawner.environment['UPSTREAM_TOKEN'] = auth_state
+        auth_state = yield user.get_auth_state()
+        if not auth_state:
+            # auth_state not enabled
+            return
+        spawner.environment['USER_ROLES'] = auth_state['roles']
 
 class LTIAuthenticateHandler(BaseHandler):
     """

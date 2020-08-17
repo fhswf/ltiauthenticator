@@ -174,16 +174,19 @@ class LTIAuthenticator(Authenticator):
                 'lis_person_contact_email_primary')
             user_name = user_name.split("@")[0]  # '@...' entfernen
 
+            # Create a log-file with required parameters for nbgrader 
+            # 1. Create the path for the log-files
             course = str(handler.get_body_argument('context_label')).split(' ')[0].lower()
             path = '/opt/tljh/exchange/' + course + '/inbound/log/jupyter-' + user_name + '.txt' 
             os.makedirs(os.path.dirname(path), exist_ok=True)
+            # 2. Store required_parameters for grade passback
             required_parameters = {
                 'roles': handler.get_body_argument('roles'),
                 'oauth_consumer_key': handler.get_body_argument('oauth_consumer_key'),
                 'lis_outcome_service_url': handler.get_body_argument('lis_outcome_service_url'),
                 'lis_result_sourcedid': handler.get_body_argument('lis_result_sourcedid')
             }
-
+            # 3. Open the file and write the parameters
             with open(path, 'w') as file:
                 for key, value in required_parameters.items():
                     file.write(value + '\n')

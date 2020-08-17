@@ -1,7 +1,9 @@
 import time
+import os
 
 from traitlets import Dict
 from tornado import gen, web
+from tornado.log import access_log
 
 from jupyterhub.auth import Authenticator
 from jupyterhub.handlers import BaseHandler
@@ -10,7 +12,8 @@ from jupyterhub.utils import url_path_join
 from oauthlib.oauth1.rfc5849 import signature
 from collections import OrderedDict
 
-__version__ = '0.4.1.dev'
+__version__ = '0.4.0'
+
 
 class LTILaunchValidator:
     # Record time when process starts, so we can reject requests made
@@ -132,6 +135,7 @@ class LTIAuthenticator(Authenticator):
         args = {}
         for k, values in handler.request.body_arguments.items():
             args[k] = values[0].decode() if len(values) == 1 else [v.decode() for v in values]
+            access_log.info(f"body_args: {k} => {values}")
 
         # handle multiple layers of proxied protocol (comma separated) and take the outermost
         if 'x-forwarded-proto' in handler.request.headers:
@@ -162,20 +166,49 @@ class LTIAuthenticator(Authenticator):
                 user_id = handler.get_body_argument('custom_canvas_user_id')
             else:
                 user_id = handler.get_body_argument('user_id')
-            
+
+            # Vor- und Nachname in der Form 'nachname_vorname':
+            # user_name = handler.get_body_argument('lis_person_name_family') + "_" + handler.get_body_argument('lis_person_name_given')
             # Erster Teil der Mailadresse (alles vor dem '@'):
-            user_name = handler.get_body_argument('lis_person_contact_email_primary')
+            user_name = handler.get_body_argument(
+                'lis_person_contact_email_primary')
             user_name = user_name.split("@")[0]  # '@...' entfernen
 
-            return {
+            course = str(handler.get_body_argument('context_label')).split(' ')[0].lower()
+            path = '/opt/tljh/exchange/' + course + '/inbound/log/jupyter-' + user_name + '.txt' 
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            required_parameters = {
+                'roles': handler.get_body_argument('roles'),
+                'oauth_consumer_key': handler.get_body_argument('oauth_consumer_key'),
+                'lis_outcome_service_url': handler.get_body_argument('lis_outcome_service_url'),
+                'lis_result_sourcedid': handler.get_body_argument('lis_result_sourcedid')
+            }
+
+            with open(path, 'w') as file:
+                for key, value in required_parameters.items():
+                    file.write(value + '\n')
+
+            state = {
                 'name': user_name,
                 'auth_state': {k: v for k, v in args.items() if not k.startswith('oauth_')}
             }
+            access_log.info(f"state object: {state}")
+            return state
 
 
     def login_url(self, base_url):
         return url_path_join(base_url, '/lti/launch')
 
+    @gen.coroutine
+    def pre_spawn_start(self, user, spawner):
+        """Pass upstream_token to spawner via environment variable"""
+        auth_state = {
+            'roles': handler.get_body_argument('roles'),
+            'oauth_consumer_key': handler.get_body_argument('oauth_consumer_key'),
+            'lis_outcome_service_url': handler.get_body_argument('lis_outcome_service_url'),
+            'lis_result_sourcedid': handler.get_body_argument('lis_result_sourcedid')
+        }
+        spawner.environment['UPSTREAM_TOKEN'] = auth_state
 
 class LTIAuthenticateHandler(BaseHandler):
     """

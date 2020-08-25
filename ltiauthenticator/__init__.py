@@ -174,42 +174,60 @@ class LTIAuthenticator(Authenticator):
                 'lis_person_contact_email_primary')
             user_name = user_name.split("@")[0]  # '@...' entfernen
 
-            # Create a log-file with required parameters for nbgrader 
-            # 1. Create the path for the log-files
-            course = str(handler.get_body_argument('context_label')).split(' ')[0].lower()
-            path = '/opt/tljh/exchange/' + course + '/inbound/log/jupyter-' + user_name + '.txt' 
+            # Enable the formgrader and the course_list for instructors
+            # Fix this if you want to have more extensions than nbgrader
+            active = 'false'
+            if handler.get_body_argument('roles') == 'Instructor':
+                active = 'true'
+            path = '/home/jupyter-' + user_name + '/.jupyter/nbconfig/tree.json'
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            # 2. Store required_parameters for grade passback
-            required_parameters = {
-                'roles': handler.get_body_argument('roles'),
-                'oauth_consumer_key': handler.get_body_argument('oauth_consumer_key'),
-                'lis_outcome_service_url': handler.get_body_argument('lis_outcome_service_url'),
-                'lis_result_sourcedid': handler.get_body_argument('lis_result_sourcedid')
-            }
-            # 3. Open the file and write the parameters
+            extensions = (
+               '{\n'
+               '  "load_extensions": {\n'
+               '    "formgrader/main": ' + active + ',\n'
+               '    "assignment_list/main": true,\n'
+               '    "course_list/main": ' + active + '\n'
+               '  }\n'
+               '}'
+            )
             with open(path, 'w') as file:
-                for key, value in required_parameters.items():
-                    file.write(value + '\n')
+                file.write(extensions) 
+
+            # Create a log-file with required parameters for nbgrader
+            # Exception handling if there are no LTI-Parameters for grade passback
+            try: 
+                # 1. Create the path for the log-files
+                course = str(handler.get_body_argument('context_label')).split(' ')[0].lower()
+                assignment = handler.get_body_argument('resource_link_title')
+                path = '/opt/tljh/exchange/' + course + '/inbound/log/' + assignment + '/jupyter-' + user_name + '.txt' 
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                # 2. Store required_parameters for grade passback
+                required_parameters = {
+                    'lis_outcome_service_url': handler.get_body_argument('lis_outcome_service_url'),
+                    'lis_result_sourcedid': handler.get_body_argument('lis_result_sourcedid')
+                }
+                # 3. Open the file and write the parameters
+                with open(path, 'w') as file:
+               	    for key, value in required_parameters.items():
+                        file.write(value + '\n')
+
+            except:
+                access_log.info("No LTI-Parameters for grade passback")
+
+            os.environ['USER_ROLE'] = 'unknown'
 
             state = {
                 'name': user_name,
                 'auth_state': {k: v for k, v in args.items() if not k.startswith('oauth_')}
             }
-            access_log.info(f"state object: {state}")
+            access_log.info(f"authenticate: {state}")
             return state
 
 
     def login_url(self, base_url):
         return url_path_join(base_url, '/lti/launch')
 
-    @gen.coroutine
-    def pre_spawn_start(self, user, spawner):
-        """Pass upstream_token to spawner via environment variable"""
-        auth_state = yield user.get_auth_state()
-        if not auth_state:
-            # auth_state not enabled
-            return
-        spawner.environment['USER_ROLES'] = auth_state['roles']
+
 
 class LTIAuthenticateHandler(BaseHandler):
     """

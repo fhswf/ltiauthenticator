@@ -72,9 +72,10 @@ class LTILaunchValidator:
                 oauth_timestamp in LTILaunchValidator.nonces
                 and args['oauth_nonce'] in LTILaunchValidator.nonces[oauth_timestamp]
         ):
-            raise web.HTTPError(401, "oauth_nonce + oauth_timestamp already used")
-        LTILaunchValidator.nonces.setdefault(oauth_timestamp, set()).add(args['oauth_nonce'])
-
+            raise web.HTTPError(
+                401, "oauth_nonce + oauth_timestamp already used")
+        LTILaunchValidator.nonces.setdefault(
+            oauth_timestamp, set()).add(args['oauth_nonce'])
 
         args_list = []
         for key, values in args.items():
@@ -126,7 +127,6 @@ class LTIAuthenticator(Authenticator):
             ('/lti/launch', LTIAuthenticateHandler)
         ]
 
-
     @gen.coroutine
     def authenticate(self, handler, data=None):
         # FIXME: Run a process that cleans up old nonces every other minute
@@ -134,14 +134,16 @@ class LTIAuthenticator(Authenticator):
 
         args = {}
         for k, values in handler.request.body_arguments.items():
-            args[k] = values[0].decode() if len(values) == 1 else [v.decode() for v in values]
+            args[k] = values[0].decode() if len(values) == 1 else [
+                v.decode() for v in values]
             access_log.info(f"body_args: {k} => {values}")
 
         # handle multiple layers of proxied protocol (comma separated) and take the outermost
         if 'x-forwarded-proto' in handler.request.headers:
             # x-forwarded-proto might contain comma delimited values
             # left-most value is the one sent by original client
-            hops = [h.strip() for h in handler.request.headers['x-forwarded-proto'].split(',')]
+            hops = [h.strip()
+                    for h in handler.request.headers['x-forwarded-proto'].split(',')]
             protocol = hops[0]
         else:
             protocol = handler.request.protocol
@@ -153,14 +155,15 @@ class LTIAuthenticator(Authenticator):
                 handler.request.headers,
                 args
         ):
-            # Before we return lti_user_id, check to see if a canvas_custom_user_id was sent. 
+            # Before we return lti_user_id, check to see if a canvas_custom_user_id was sent.
             # If so, this indicates two things:
             # 1. The request was sent from Canvas, not edX
             # 2. The request was sent from a Canvas course not running in anonymous mode
             # If this is the case we want to use the canvas ID to allow grade returns through the Canvas API
             # If Canvas is running in anonymous mode, we'll still want the 'user_id' (which is the `lti_user_id``)
 
-            canvas_id = handler.get_body_argument('custom_canvas_user_id', default=None)
+            canvas_id = handler.get_body_argument(
+                'custom_canvas_user_id', default=None)
 
             if canvas_id is not None:
                 user_id = handler.get_body_argument('custom_canvas_user_id')
@@ -179,27 +182,31 @@ class LTIAuthenticator(Authenticator):
             active = 'false'
             if handler.get_body_argument('roles') == 'Instructor':
                 active = 'true'
+            home_dir = '/home/jupyter-' + user_name
+            if os.path.exists(home_dir):
             path = '/home/jupyter-' + user_name + '/.jupyter/nbconfig/tree.json'
             os.makedirs(os.path.dirname(path), exist_ok=True)
             extensions = (
-               '{\n'
-               '  "load_extensions": {\n'
-               '    "formgrader/main": ' + active + ',\n'
-               '    "assignment_list/main": true,\n'
-               '    "course_list/main": ' + active + '\n'
-               '  }\n'
-               '}'
+                '{\n'
+                '  "load_extensions": {\n'
+                '    "formgrader/main": ' + active + ',\n'
+                '    "assignment_list/main": true,\n'
+                '    "course_list/main": ' + active + '\n'
+                '  }\n'
+                '}'
             )
             with open(path, 'w') as file:
-                file.write(extensions) 
+                file.write(extensions)
 
             # Create a log-file with required parameters for nbgrader
             # Exception handling if there are no LTI-Parameters for grade passback
-            try: 
+            try:
                 # 1. Create the path for the log-files
-                course = str(handler.get_body_argument('context_label')).split(' ')[0].lower()
+                course = str(handler.get_body_argument(
+                    'context_label')).split(' ')[0].lower()
                 assignment = handler.get_body_argument('resource_link_title')
-                path = '/opt/tljh/exchange/' + course + '/inbound/log/' + assignment + '/jupyter-' + user_name + '.txt' 
+                path = '/opt/tljh/exchange/' + course + '/inbound/log/' + \
+                    assignment + '/jupyter-' + user_name + '.txt'
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 # 2. Store required_parameters for grade passback
                 required_parameters = {
@@ -208,7 +215,7 @@ class LTIAuthenticator(Authenticator):
                 }
                 # 3. Open the file and write the parameters
                 with open(path, 'w') as file:
-               	    for key, value in required_parameters.items():
+                    for key, value in required_parameters.items():
                         file.write(value + '\n')
 
             except:
@@ -223,10 +230,8 @@ class LTIAuthenticator(Authenticator):
             access_log.info(f"authenticate: {state}")
             return state
 
-
     def login_url(self, base_url):
         return url_path_join(base_url, '/lti/launch')
-
 
 
 class LTIAuthenticateHandler(BaseHandler):

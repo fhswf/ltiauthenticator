@@ -183,20 +183,21 @@ class LTIAuthenticator(Authenticator):
             if handler.get_body_argument('roles') == 'Instructor':
                 active = 'true'
             home_dir = '/home/jupyter-' + user_name
-            if os.path.exists(home_dir):
-            path = '/home/jupyter-' + user_name + '/.jupyter/nbconfig/tree.json'
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            extensions = (
-                '{\n'
-                '  "load_extensions": {\n'
-                '    "formgrader/main": ' + active + ',\n'
-                '    "assignment_list/main": true,\n'
-                '    "course_list/main": ' + active + '\n'
-                '  }\n'
-                '}'
-            )
-            with open(path, 'w') as file:
-                file.write(extensions)
+            jupyter_conf_dir = os.path.join(home_dir, '.jupyter')
+            if os.path.exists(jupyter_conf_dir):
+                path = os.path.join(jupyter_conf_dir, 'nbconfig', 'tree.json')
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                extensions = (
+                    '{\n'
+                    '  "load_extensions": {\n'
+                    '    "formgrader/main": ' + active + ',\n'
+                    '    "assignment_list/main": true,\n'
+                    '    "course_list/main": ' + active + '\n'
+                    '  }\n'
+                    '}'
+                )
+                with open(path, 'w') as file:
+                    file.write(extensions)
 
             # Create a log-file with required parameters for nbgrader
             # Exception handling if there are no LTI-Parameters for grade passback
